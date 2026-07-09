@@ -1,0 +1,2 @@
+# Discord Weekly Artleaderboard bot
+
