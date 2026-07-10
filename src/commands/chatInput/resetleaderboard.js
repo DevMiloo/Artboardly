@@ -8,7 +8,7 @@ module.exports = {
 		.setDescription("Resets the leaderboard."),
 
 	async execute({ interaction }) {
-		await interaction.deferReply({ ephemeral: true });
+		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 		const success = await resetleaderboard(interaction.guild, interaction.client);
 
 		if (success) {
