@@ -30,19 +30,19 @@ async function handleDashboardComponent(i, state, config, client) {
 
 		case "db_role_top3":
 			console.log("Selected top3 role:", i.values[0]);
-			await config.update({ top3_role: i.values[0] });
+			await config.update({ top3_role: i.values[0] || null });
 			return rerender(i, state, config);
 
 		case "db_role_n1":
-			await config.update({ n1_role: i.values[0] });
+			await config.update({ n1_role: i.values[0] || null });
 			return rerender(i, state, config);
 
 		case "db_role_n2":
-			await config.update({ n2_role: i.values[0] });
+			await config.update({ n2_role: i.values[0] || null });
 			return rerender(i, state, config);
 
 		case "db_role_n3":
-			await config.update({ n3_role: i.values[0] });
+			await config.update({ n3_role: i.values[0] || null });
 			return rerender(i, state, config);
 
 		case "db_toggle_delete":
@@ -124,7 +124,7 @@ async function openScheduleModal(i, state, config) {
 
 	const timeInput = new TextInputBuilder()
 		.setCustomId("m_time_input")
-		.setLabel("Time (24-hour format HH:MM)")
+		.setLabel("UTC Time (24-hour format HH:MM)")
 		.setValue(config.post_time)
 		.setMaxLength(5)
 		.setStyle(TextInputStyle.Short);

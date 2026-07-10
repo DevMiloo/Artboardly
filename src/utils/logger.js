@@ -16,12 +16,20 @@ class Logger {
 		console.warn(`${colors.yellow(`[${this.origin}] [WARN]`)} ${message}`);
 	}
 
-	error(message) {
-		if (message instanceof Error) {
-			console.error(`${colors.red(`[${this.origin}] [ERROR]`)}`, message.stack);
-		} else {
-			console.error(`${colors.red(`[${this.origin}] [ERROR]`)} ${message}`);
-		}
+	error(...args) {
+		const prefix = `${colors.red(`[${this.origin}] [ERROR]`)}`;
+
+		const formattedArgs = args.map((arg) => {
+			if (arg instanceof Error) {
+				return arg.stack;
+			}
+			if (typeof arg === "object" && arg !== null) {
+				return JSON.stringify(arg, null, 2);
+			}
+			return arg;
+		});
+
+		console.error(prefix, ...formattedArgs);
 	}
 }
 

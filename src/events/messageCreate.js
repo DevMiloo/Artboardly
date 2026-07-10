@@ -4,7 +4,7 @@ const { ArtBoardConfig } = require("../dbFunctions.js");
 module.exports = {
 	event: Events.MessageCreate,
 	type: "on",
-	async call(message) {
+	async call(_client, message) {
 		if (message.attachments.size === 0) return;
 
 		if (message.author.bot) return;

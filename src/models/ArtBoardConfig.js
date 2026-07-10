@@ -12,5 +12,7 @@ module.exports = (sequelize, DataTypes) => {
 		n1_role: { type: DataTypes.STRING, defaultValue: null },
 		n2_role: { type: DataTypes.STRING, defaultValue: null },
 		n3_role: { type: DataTypes.STRING, defaultValue: null },
+		last_reset: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
+		failed_resets: { type: DataTypes.INTEGER, defaultValue: 0 },
 	});
 };

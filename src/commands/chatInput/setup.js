@@ -32,7 +32,7 @@ module.exports = {
 
 		await interaction.reply({
 			components: [buildDashboardPage(state.tab, config, interaction.guild)],
-			flags: MessageFlags.IsComponentsV2,
+			flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
 		});
 
 		const responseMessage = await interaction.fetchReply();

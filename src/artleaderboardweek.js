@@ -41,103 +41,61 @@ async function resetleaderboard(guild, client) {
 	const config = await ArtBoardConfig.findOne({ where: { server_id: guild.id } });
 
 	if (!config?.artchannels || !config.artleaderboardchannel) {
-		console.error("Missing config data");
-		return;
+		logger.error("Missing config data");
+		return false;
 	}
 
 	const artchannels = Array.isArray(config.artchannels) ? config.artchannels : [config.artchannels];
 	const channeltosendid = config.artleaderboardchannel;
 
-	console.log("1");
-	if (!artchannels || !channeltosendid) return;
+	if (!artchannels || !channeltosendid) return false;
 
-	console.log("1.5");
 	const channeltosend = client.channels.cache.get(channeltosendid);
-	const messages = await channeltosend.messages.fetch({ limit: 5 }).catch((e) => console.log(e));
 
 	try {
 		const leaderboard = await ArtLeaderboard.findOne({ where: { server_id: guild.id } });
 
 		if (!leaderboard?.JSON) {
-			console.error("No leaderboard data found");
-			return;
+			logger.error("No leaderboard data found");
+			return false;
 		}
-		console.log("2");
 
 		const values = Object.entries(leaderboard.JSON)?.map(([messageId, data]) => ({
 			id: messageId,
 			...data,
 		}));
-		console.log("2.5");
 
 		const sortedValues = values.sort((a, b) => b.reactions - a.reactions);
-		console.log("Sorted values:", sortedValues);
-
-		async function fetchImage(artchannels, messageId) {
-			for (const channelId of artchannels) {
-				try {
-					const channel = await client.channels.fetch(channelId, { force: true });
-					if (!channel) {
-						console.error(`Channel ID ${channelId} not found`);
-						continue;
-					}
-					await channel.messages.cache.delete(messageId);
-					const msg = await channel.messages.fetch(messageId, { force: true });
-					if (msg) {
-						const attachment = msg.attachments.first();
-						if (attachment && supportedImageTypes.includes(attachment.contentType)) {
-							try {
-								const response = await fetch(attachment.url, { method: "HEAD" });
-								if (!response.ok)
-									console.error(`Attachment URL invalid: ${attachment.url} (${response.status})`);
-								return attachment;
-							} catch (urlError) {
-								console.error(`Failed to validate URL: ${attachment.url}`, urlError);
-							}
-						} else {
-							console.error(`Unsupported type: ${attachment.contentType} for msg ${messageId}`);
-						}
-					}
-				} catch (error) {
-					console.error(`Error in channel ${channelId}, msg ${messageId}:`, error);
-				}
-			}
-			return null;
-		}
 
 		let topPlaces = [];
 		for (let i = 0; i < sortedValues.length && topPlaces.length < 3; i++) {
 			if (!sortedValues[i].id) {
-				console.error("Missing message ID for entry:", sortedValues[i]);
+				logger.error("Missing message ID for entry:", sortedValues[i]);
 				continue;
 			}
 
 			const isDuplicate = topPlaces.some((place) => place.author === sortedValues[i].author);
 			if (isDuplicate) {
-				console.log(`Skipping duplicate author: ${sortedValues[i].author}`);
+				logger.info(`Skipping duplicate author: ${sortedValues[i].author}`);
 				continue;
 			}
 
-			const image = await fetchImage(artchannels, sortedValues[i].id);
+			const image = await fetchImage(artchannels, sortedValues[i].id, client);
 			if (image) topPlaces.push({ ...sortedValues[i], image });
 
 			// Delay to not get ratelimited
 			if (topPlaces.length < 3) await new Promise((resolve) => setTimeout(resolve, 1000));
 		}
-		console.log("3");
 
 		if (topPlaces.length < 3) {
 			console.error("Not enough valid entries found");
-			return;
+			return false;
 		}
-		console.log("4");
 
 		const Canvas = require("canvas");
 		canvas = Canvas.createCanvas(1920, 1080);
 		ctx = canvas.getContext("2d");
 		const background = await Canvas.loadImage(path.join(sourceUIPath, "gallery2.png"));
-
-		console.log(topPlaces);
 
 		const [n1, n2, n3] = await Promise.all(
 			topPlaces.map((p) => Canvas.loadImage(p.image.url.toString())),
@@ -152,7 +110,6 @@ async function resetleaderboard(guild, client) {
 		);
 
 		topPlaces = [];
-		console.log("5");
 
 		ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
 
@@ -232,45 +189,6 @@ async function resetleaderboard(guild, client) {
 			medalScale: medalverklein,
 		});
 
-		function getDisplayName(user) {
-			if (!user.globalName) return user.username;
-
-			// biome-ignore lint/suspicious/noControlCharactersInRegex: Was ignored by eslint prior(???)
-			const specialchar = /[^\x00-\x7F]/.test(user.globalName);
-			if (specialchar) return user.username;
-			else return user.globalName;
-		}
-
-		// Wrap text
-		function wrapText(ctx, text, maxWidth) {
-			const words = text.split(" ");
-			const lines = [];
-			let currentLine = words[0];
-
-			for (let i = 1; i < words.length; i++) {
-				const word = words[i];
-				const width = ctx.measureText(String(currentLine).concat(" ").concat(word)).width;
-
-				if (width < maxWidth) {
-					currentLine += String(" ").concat(word);
-				} else {
-					lines.push(currentLine);
-					currentLine = word;
-				}
-			}
-			lines.push(currentLine);
-			return lines;
-		}
-
-		function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight = 70) {
-			const lines = wrapText(ctx, text, maxWidth);
-
-			const totalHeight = lines.length * lineHeight;
-			const startY = y - totalHeight / 2 + lineHeight / 2;
-
-			lines.forEach((line, index) => void ctx.fillText(line, x, startY + index * lineHeight));
-		}
-
 		ctx.font = 'italic 60px "Montserrat", sans-serif';
 		ctx.fillStyle = "#ffffff";
 		ctx.textAlign = "center";
@@ -302,22 +220,44 @@ async function resetleaderboard(guild, client) {
 		);
 
 		const final = canvas.toBuffer();
-		console.log("6");
 
-		//!!! This needs to become dynamic from this point depending on configuration.
-		const message = messages.find(
-			(msg) => msg.author.id === client.user.id && msg.content === messageContent,
-		);
-		if (message) await message.delete();
-		console.log("7");
+		//delete the previous art
+		if (config.delete_previous === true) {
+			const messages = await channeltosend.messages
+				.fetch({ limit: 10 })
+				.catch((e) => logger.error(e));
 
-		channeltosend.send({
+			const message = messages.find(
+				(msg) => msg.author.id === client.user.id && msg.attachments.size > 0,
+			);
+			if (message) await message.delete();
+		}
+
+		//send the new art leaderboard
+		await channeltosend.send({
 			files: [{ attachment: final }],
 		});
-		console.log("8");
 
+		config.last_reset = new Date();
+		config.failed_resets = 0;
+		await config.save();
 		await ArtLeaderboard.destroy({ where: { server_id: guild.id } });
-		console.log("9");
+
+		//assign the roles to the winners
+		const top3RoleId = config.top3_role;
+		const n1RoleId = config.n1_role;
+		const n2RoleId = config.n2_role;
+		const n3RoleId = config.n3_role;
+
+		if (top3RoleId) {
+			const top3Artists = [artist1, artist2, artist3];
+			await assignRoles(guild, top3Artists, top3RoleId);
+		}
+		if (n1RoleId) await assignRoles(guild, [artist1], n1RoleId);
+		if (n2RoleId) await assignRoles(guild, [artist2], n2RoleId);
+		if (n3RoleId) await assignRoles(guild, [artist3], n3RoleId);
+
+		return true;
 	} catch (error) {
 		channeltosend.send(
 			String(
@@ -326,8 +266,51 @@ async function resetleaderboard(guild, client) {
 				.concat(error)
 				.concat("\n```"),
 		);
-		console.error("Error resetting leaderboard:", error);
+		logger.error("Error resetting leaderboard:", error);
 	}
+}
+
+async function assignRoles(guild, artists, roleId) {
+	const role = guild.roles.cache.get(roleId);
+	if (!role) return;
+
+	for (const artist of artists) {
+		const member = guild.members.cache.get(artist.id);
+		if (member) {
+			await member.roles.add(role).catch(logger.error);
+		}
+	}
+}
+async function fetchImage(artchannels, messageId, client) {
+	for (const channelId of artchannels) {
+		try {
+			const channel = await client.channels.fetch(channelId, { force: true });
+			if (!channel) {
+				logger.error(`Channel ID ${channelId} not found`);
+				continue;
+			}
+			await channel.messages.cache.delete(messageId);
+			const msg = await channel.messages.fetch(messageId, { force: true });
+			if (msg) {
+				const attachment = msg.attachments.first();
+				if (attachment && supportedImageTypes.includes(attachment.contentType)) {
+					try {
+						const response = await fetch(attachment.url, { method: "HEAD" });
+						if (!response.ok)
+							logger.error(`Attachment URL invalid: ${attachment.url} (${response.status})`);
+						return attachment;
+					} catch (urlError) {
+						logger.error(`Failed to validate URL: ${attachment.url}`, urlError);
+					}
+				} else {
+					logger.error(`Unsupported type: ${attachment.contentType} for msg ${messageId}`);
+				}
+			}
+		} catch (error) {
+			logger.error(`Error in channel ${channelId}, msg ${messageId}:`, error);
+		}
+	}
+	return null;
 }
 
 function drawPodiumEntry(
@@ -350,6 +333,45 @@ function drawPodiumEntry(
 	);
 }
 
+function getDisplayName(user) {
+	if (!user.globalName) return user.username;
+
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: Was ignored by eslint prior(???)
+	const specialchar = /[^\x00-\x7F]/.test(user.globalName);
+	if (specialchar) return user.username;
+	else return user.globalName;
+}
+
+// Wrap text
+function wrapText(ctx, text, maxWidth) {
+	const words = text.split(" ");
+	const lines = [];
+	let currentLine = words[0];
+
+	for (let i = 1; i < words.length; i++) {
+		const word = words[i];
+		const width = ctx.measureText(String(currentLine).concat(" ").concat(word)).width;
+
+		if (width < maxWidth) {
+			currentLine += String(" ").concat(word);
+		} else {
+			lines.push(currentLine);
+			currentLine = word;
+		}
+	}
+	lines.push(currentLine);
+	return lines;
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight = 70) {
+	const lines = wrapText(ctx, text, maxWidth);
+
+	const totalHeight = lines.length * lineHeight;
+	const startY = y - totalHeight / 2 + lineHeight / 2;
+
+	lines.forEach((line, index) => void ctx.fillText(line, x, startY + index * lineHeight));
+}
+
 async function debounceUpdate(reaction, user) {
 	const key = reaction.message.id;
 	if (reactionUpdate.has(key)) clearTimeout(reactionUpdate.get(key));
@@ -367,7 +389,7 @@ async function updatedb(reaction, user) {
 		try {
 			await reaction.fetch().catch(() => {});
 		} catch (error) {
-			console.error("Something went wrong when fetching the message:", error);
+			logger.error("Something went wrong when fetching the message:", error);
 			return;
 		}
 	}
@@ -377,8 +399,9 @@ async function updatedb(reaction, user) {
 		!reaction.message?.author ||
 		reaction.message?.author.bot ||
 		user.bot
-	)
+	) {
 		return;
+	}
 
 	const config = await ArtBoardConfig.findOne({
 		where: { server_id: reaction.message.guild.id },
@@ -398,13 +421,9 @@ async function updatedb(reaction, user) {
 
 	if (reactedemoji !== config.emoji) return;
 
-	const date = new Date();
-	const dayOfWeek = date.getDay();
-	const daysSinceLastSaturday = (dayOfWeek + 1) % 7;
-	const lastSaturday = new Date(date.getTime() - daysSinceLastSaturday * 24 * 60 * 60 * 1000);
-	lastSaturday.setUTCHours(10, 0, 0, 0);
+	const lastReset = new Date(config.last_reset);
 
-	if (reaction.message.createdTimestamp < lastSaturday.getTime()) return;
+	if (reaction.message.createdTimestamp < lastReset.getTime()) return;
 
 	const reactionCount = reaction.count - 1; // Subtract 1 to exclude the bot's own reaction
 
@@ -419,7 +438,7 @@ async function updatedb(reaction, user) {
 		delete currentData[reaction.message.id];
 	} else {
 		currentData[reaction.message.id] = {
-			reactions: reactionCountreactionCount,
+			reactions: reactionCount,
 			author: reaction.message.author.id,
 		};
 	}

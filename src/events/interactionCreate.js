@@ -42,7 +42,6 @@ module.exports = {
 };
 
 function isSelectMenu(interaction) {
-	//return (interaction.isStringSelectMenu() || interaction.isChannelSelectMenu() || interaction.isRoleSelectMenu());
 	return (
 		interaction.isStringSelectMenu() ||
 		interaction.isChannelSelectMenu() ||

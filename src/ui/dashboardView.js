@@ -9,10 +9,12 @@ const {
 	ChannelType,
 } = require("discord.js");
 
+const { getNextResetDate } = require("../handlers/cronJob.js");
+
 const TABS = {
-	channels: { label: "Channels & Emoji", emoji: "📍", accent: 0x5865f2 },
+	channels: { label: "Channels & Emoji", emoji: "📍", accent: 0x008080 },
 	roles: { label: "Placement Roles", emoji: "🏆", accent: 0xf1c40f },
-	schedule: { label: "Schedule & Automation", emoji: "⏰", accent: 0x9b59b6 },
+	schedule: { label: "Schedule & Automation", emoji: "⏰", accent: 0x800076 },
 	actions: { label: "Admin Actions", emoji: "⚡", accent: 0xed4245 },
 };
 
@@ -37,7 +39,7 @@ function navigationMenu(activeTab) {
 function buildHeader(container, guild) {
 	container.addTextDisplayComponents((t) =>
 		t.setContent(
-			`## Artboardly settings for **${guild.name}**\n> *Use the select menu below to switch categories.*`,
+			`## Artboardly settings for **${guild.name}**\n> *Use the menu below to switch categories.*`,
 		),
 	);
 }
@@ -111,7 +113,7 @@ function buildRolesTab(container, cfg) {
 
 	const roleFields = [
 		{
-			label: "🏅 Top 3 shared role",
+			label: "🏅 Top 3 role",
 			role: cfg.top3_role,
 			id: "db_role_top3",
 			placeholder: "Set the shared top 3 role",
@@ -145,6 +147,7 @@ function buildRolesTab(container, cfg) {
 				new RoleSelectMenuBuilder()
 					.setCustomId(r.id)
 					.setPlaceholder(r.placeholder)
+					.setMinValues(0)
 					.addDefaultRoles(r.role ? [r.role] : []),
 			),
 		);
@@ -152,11 +155,40 @@ function buildRolesTab(container, cfg) {
 }
 
 function buildScheduleTab(container, cfg) {
+	const nextResetDate = getNextResetDate(
+		cfg.last_reset,
+		cfg.post_interval,
+		cfg.post_time,
+		cfg.post_day,
+		cfg.failed_resets,
+	);
+
 	container.addTextDisplayComponents((t) =>
 		t.setContent(field("🗓️ Posting interval", `\`${cfg.post_interval}\``)),
 	);
 	container.addTextDisplayComponents((t) =>
-		t.setContent(field("⏱️ Posting schedule", `Every **${cfg.post_day}** at **${cfg.post_time}**`)),
+		t.setContent(
+			field(
+				"⏱️ Posting schedule",
+				`**${cfg.post_day}** at **${cfg.post_time}** UTC (local: <t:${nextResetDate.getTime() / 1000}:t>)`,
+			),
+		),
+	);
+	container.addTextDisplayComponents((t) =>
+		t.setContent(
+			field("🕰️ Last reset", `<t:${Math.floor(new Date(cfg.last_reset).getTime() / 1000)}:F>`),
+		),
+	);
+	container.addTextDisplayComponents((t) =>
+		t.setContent(field("🕰️ Next scheduled reset", `<t:${nextResetDate.getTime() / 1000}:F>`)),
+	);
+	container.addTextDisplayComponents((t) =>
+		t.setContent(
+			field(
+				"⚠️ Failed resets",
+				`**${cfg.failed_resets || 0}** failed reset${(cfg.failed_resets || 0) === 1 ? "" : "s"} since last successful reset\n-# Usually due to not enough valid entries within the timeslot, can however be a configuration error.`,
+			),
+		),
 	);
 	container.addTextDisplayComponents((t) =>
 		t.setContent(

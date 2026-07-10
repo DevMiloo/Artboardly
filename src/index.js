@@ -5,6 +5,7 @@ const find_events = require("./utils/initialisation/find_events");
 const find_commands = require("./utils/initialisation/find_commands");
 const register_commands = require("./utils/initialisation/register_commands");
 const artleaderboardweek = require("./artleaderboardweek.js"); // Component : Art leaderboard.
+const { startCron } = require("./handlers/cronJob.js"); // Component : Cron job for resetting the leaderboard.
 
 assert(
 	process.env.TOKEN,
@@ -27,6 +28,9 @@ const commands = find_commands(client);
 
 // initialise the artleaderboard
 artleaderboardweek(client);
+
+//initialise cron job for resetting the leaderboard
+startCron(client);
 
 client.login(process.env.TOKEN);
 
