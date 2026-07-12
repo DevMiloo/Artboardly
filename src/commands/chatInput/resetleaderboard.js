@@ -1,11 +1,12 @@
-const { MessageFlags, SlashCommandBuilder } = require("discord.js");
+const { MessageFlags, SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 
 const { resetleaderboard } = require("../../artleaderboardweek.js");
 
 module.exports = {
 	register_command: new SlashCommandBuilder()
 		.setName("resetleaderboard")
-		.setDescription("Resets the leaderboard."),
+		.setDescription("Resets the leaderboard.")
+		.setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
 	async execute({ interaction }) {
 		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
